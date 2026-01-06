@@ -1,0 +1,74 @@
+#include <stdio.h>
+#include <pthread.h>
+#include <stdatomic.h>
+
+typedef struct global_data
+{
+    int data;
+    int count;
+    atomic_flag m;   // 用來當 binary semaphore
+} global_data;
+
+global_data gdata = {0, 0, ATOMIC_FLAG_INIT};
+
+void semwait()
+{
+    while (atomic_flag_test_and_set(&gdata.m)) {
+        ;   // busy wait
+    }
+    // --- P (進入 critical section) ---
+}
+
+void semsignal()
+{
+    // --- V (離開 critical section) ---
+    atomic_flag_clear(&gdata.m);
+}
+
+void *subchild(void *arg)
+{
+    for (int i = 1; i <= 100000; i++)
+    {
+        semwait();
+
+        gdata.data--;
+
+        if (i % 1000 == 0)
+            printf("[SUB ] i=%6d   data=%6d\n", i, gdata.data);
+
+        semsignal();
+    }
+    return NULL;
+}
+
+void *addchild(void *arg)
+{
+    for (int i = 1; i <= 100000; i++)
+    {
+        semwait();
+
+        gdata.data++;
+
+        if (i % 1000 == 0)
+            printf("[ADD ] i=%6d   data=%6d\n", i, gdata.data);
+
+        semsignal();
+    }
+    return NULL;
+}
+
+int main()
+{
+    pthread_t t1, t2;
+
+    printf("Start Semaphore Test...\n");
+
+    pthread_create(&t1, NULL, addchild, NULL);
+    pthread_create(&t2, NULL, subchild, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    printf("Final data = %d\n", gdata.data);
+    return 0;
+}
