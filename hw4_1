@@ -1,0 +1,68 @@
+#include <stdio.h>
+#include <pthread.h>
+#include <stdatomic.h>
+
+int data = 0;
+atomic_int flag[2] = {0, 0};
+atomic_int turn = 0;
+
+void peterson_lock(int self)
+{
+    int other = 1 - self;
+    flag[self] = 1;
+    turn = other;
+    while (flag[other] && turn == other) { }
+}
+
+void peterson_unlock(int self)
+{
+    flag[self] = 0;
+}
+
+void *addchild(void *arg)
+{
+    int id = 0;
+    for (int i = 1; i <= 100000; i++) {
+        peterson_lock(id);
+
+        data++;
+
+        if (i % 1000 == 0)
+            printf("[ADD ] i=%6d  data=%6d\n", i, data);
+
+        peterson_unlock(id);
+    }
+    return NULL;
+}
+
+void *subchild(void *arg)
+{
+    int id = 1;
+    for (int i = 1; i <= 100000; i++) {
+        peterson_lock(id);
+
+        data--;
+
+        if (i % 1000 == 0)
+            printf("[SUB ] i=%6d  data=%6d\n", i, data);
+
+        peterson_unlock(id);
+    }
+    return NULL;
+}
+
+int main()
+{
+    pthread_t t1, t2;
+
+    printf("Start computing...\n");
+
+    pthread_create(&t1, NULL, addchild, NULL);
+    pthread_create(&t2, NULL, subchild, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    printf("Final data = %d\n", data);
+    return 0;
+}
